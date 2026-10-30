@@ -1,0 +1,14 @@
+# Dependencies & Backups
+backup/
+*.bak
+*.tmp
+*.swp
+
+# OS Files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Secret & Environment
+.env
+*.local
