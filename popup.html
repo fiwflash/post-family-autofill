@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        /* [แนบ CSS เดิมจากที่เคยให้ไว้ + เพิ่ม CSS สำหรับ Tag] */
         body { width: 100%; min-height: 100vh; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f1f5f9; margin: 0; padding: 16px; box-sizing: border-box; }
         * { box-sizing: border-box; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         .header h1 { font-size: 20px; font-weight: bold; color: #dc2626; margin: 0; }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+        .gear-btn { background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 6px; border-radius: 50%; transition: background 0.2s; }
+        .gear-btn:hover { background: #e2e8f0; }
         .status-dot { width: 12px; height: 12px; border-radius: 50%; background-color: #cbd5e1; }
         .status-dot.online { background-color: #22c55e; }
         .card { background: white; padding: 12px; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 12px; }
@@ -24,21 +26,61 @@
         .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
         .review-field label { font-size: 10px; color: #64748b; margin-bottom: 2px; }
         .review-field.full { grid-column: span 2; }
-        
-        /* 🌟 CSS สำหรับ Referral Code Tags */
+
+        /* Referral Code Tags */
         .ref-tag { display: inline-block; padding: 4px 10px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 12px; cursor: pointer; margin-right: 5px; margin-bottom: 5px; user-select: none; transition: all 0.2s; }
         .ref-tag:hover { background: #e2e8f0; }
         .ref-tag.selected { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; font-weight: bold; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .ref-tag .delete-btn { margin-left: 6px; color: #ef4444; font-weight: bold; border: none; background: none; cursor: pointer; font-size: 14px; padding: 0; vertical-align: middle; }
-        
+
         .password-wrapper { position: relative; }
         .eye-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #64748b; font-size: 16px; }
+
+        /* ========================================== */
+        /* SETTINGS MODAL */
+        /* ========================================== */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: none; z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+        .modal-overlay.open { display: flex; }
+        .modal { background: white; border-radius: 16px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; background: white; z-index: 1; }
+        .modal-header h2 { font-size: 15px; margin: 0; color: #1e293b; }
+        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: #64748b; padding: 0 4px; }
+        .modal-body { padding: 16px; }
+        .modal-footer { padding: 10px 16px; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; position: sticky; bottom: 0; background: white; }
+
+        .presets { display: flex; gap: 8px; margin-bottom: 16px; }
+        .preset { flex: 1; padding: 8px 4px; border: 2px solid #e2e8f0; background: white; border-radius: 10px; cursor: pointer; font-size: 11px; font-weight: bold; color: #64748b; transition: all 0.2s; text-align: center; }
+        .preset.active { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
+        .preset .emoji { display: block; font-size: 18px; margin-bottom: 2px; }
+
+        .group { margin-bottom: 14px; }
+        .group-title { font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px dashed #e2e8f0; }
+        .setting { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; gap: 8px; }
+        .setting:last-child { border-bottom: none; }
+        .setting-info { flex: 1; padding-right: 4px; }
+        .setting-label { font-size: 12px; color: #1e293b; font-weight: 500; }
+        .setting-desc { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+        .setting-input { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+        .setting-input input { width: 56px; padding: 6px 8px; text-align: center; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; background: #f8fafc; font-weight: bold; }
+        .setting-input .unit { font-size: 10px; color: #94a3b8; }
+
+        details.advanced { margin-top: 4px; }
+        details.advanced summary { cursor: pointer; font-size: 11px; color: #94a3b8; padding: 8px 0; user-select: none; }
+        details.advanced[open] summary { color: #64748b; font-weight: bold; }
+        details.advanced .setting { padding-left: 8px; border-left: 2px solid #f1f5f9; margin-left: 4px; }
+
+        .autosave-note { text-align: center; font-size: 10px; color: #22c55e; margin: 8px 0 0; font-weight: bold; }
+        .reset-link { background: none; border: none; color: #94a3b8; font-size: 11px; cursor: pointer; text-decoration: underline; }
+        .reset-link:hover { color: #ef4444; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>POST Family AutoFill</h1>
-        <div id="modelStatus" class="status-dot"></div>
+        <div class="header-right">
+            <button id="settingsBtn" class="gear-btn" type="button" title="ตั้งค่าความเร็ว">⚙️</button>
+            <div id="modelStatus" class="status-dot"></div>
+        </div>
     </div>
 
     <!-- ========================================== -->
@@ -63,7 +105,6 @@
             </button>
         </div>
 
-        <!-- 🌟 Referral Code Bank -->
         <div class="card" style="border-color: #bfdbfe;">
             <label style="color: #1e40af; margin-bottom: 8px;">🎁 หมายเลขสมาชิกที่แนะนำ (Referral Code)</label>
             <div style="display: flex; gap: 8px; margin-bottom: 8px;">
@@ -71,9 +112,7 @@
                 <input type="text" id="newRefNameInput" placeholder="ชื่อเรียก เช่น ฟิวส์" style="flex: 1; padding: 6px;">
                 <button id="addRefCodeBtn" style="background: #3b82f6; color: white; border: none; border-radius: 6px; padding: 0 12px; cursor: pointer; font-weight: bold;">+ เพิ่ม</button>
             </div>
-            <div id="refCodeContainer" style="display: flex; flex-wrap: wrap; gap: 4px;">
-                <!-- Tags จะถูก Render ที่นี่ -->
-            </div>
+            <div id="refCodeContainer" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
         </div>
 
         <div class="card">
@@ -81,7 +120,6 @@
             <input type="text" id="recommendedPostcode" placeholder="กรอกรหัสไปรษณีย์ที่ใช้บ่อย">
         </div>
 
-        <!-- Paste Box -->
         <div class="card drop-zone" id="pasteZone">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <label style="margin-bottom: 0; color: #1e40af;">📄 ข้อมูลนำเข้า</label>
@@ -99,7 +137,6 @@
     <!-- REVIEW VALIDATION SECTION -->
     <!-- ========================================== -->
     <div id="reviewSection">
-        <!-- Personal Info Review -->
         <div class="card">
             <label style="margin: 0; color: #0284c7;">👤 ข้อมูลส่วนตัว (Step 2)</label>
             <div class="review-grid" style="margin-top: 8px;">
@@ -109,7 +146,7 @@
                 <div class="review-field"><label>Passport No.</label><input type="text" id="rev_passport"></div>
                 <div class="review-field"><label>เบอร์โทร</label><input type="text" id="rev_phone"></div>
                 <div class="review-field full"><label>Email</label><input type="email" id="rev_email"></div>
-                
+
                 <div class="review-field full"><label>วันเกิด (วว/ดด/ปปปป)</label>
                     <div style="display:flex; gap:4px;">
                         <input type="text" id="rev_dob_day" placeholder="วว" style="width:40px; text-align:center;">
@@ -117,8 +154,7 @@
                         <input type="text" id="rev_dob_year" placeholder="ปปปป" style="width:60px; text-align:center;">
                     </div>
                 </div>
-                
-                <!-- 🌟 Password Section -->
+
                 <div class="review-field full">
                     <label>รหัสผ่าน (Password)</label>
                     <div class="password-wrapper">
@@ -137,7 +173,6 @@
             </div>
         </div>
 
-        <!-- Address Review -->
         <div class="card">
             <label style="margin: 0; color: #16a34a;">🏠 ข้อมูลที่อยู่อาศัย (Step 3)</label>
             <div class="review-grid" style="margin-top: 8px;">
@@ -152,13 +187,134 @@
             </div>
         </div>
 
-        <!-- Action Buttons -->
         <button id="fillStep2Btn" class="btn-main" style="background-color: #0284c7;">🔵 กรอกข้อมูล Step 2</button>
         <button id="fillStep3Btn" class="btn-main" style="background-color: #16a34a; margin-top: 8px;">🟢 กรอกข้อมูล Step 3</button>
         <button id="cancelBtn" class="btn-secondary">ย้อนกลับ / แก้ไขใหม่</button>
     </div>
 
     <div id="status" class="status-text" style="margin-top: 16px; text-align: center; font-size: 11px; font-weight: bold; color: #94a3b8;">พร้อมทำงาน! แปะรูป หรือข้อความได้เลย</div>
+
+    <!-- ========================================== -->
+    <!-- ⚙️ SETTINGS MODAL -->
+    <!-- ========================================== -->
+    <!-- ⚠️ ลบ onclick="..." ออกทั้งหมด เพราะ CSP ของ Extension ไม่รองรับ -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>⚙️ ปรับความเร็วการกรอก</h2>
+                <button class="close-btn" type="button" id="closeModalBtnX">✕</button>
+            </div>
+            <div class="modal-body">
+
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">เลือกโหมด — หากไม่แน่ใจใช้ "ปกติ"</div>
+                <div class="presets">
+                    <div class="preset" data-preset="fast"><span class="emoji">⚡</span>เร็ว</div>
+                    <div class="preset" data-preset="normal"><span class="emoji">⚖️</span>ปกติ</div>
+                    <div class="preset" data-preset="safe"><span class="emoji">🐢</span>ปลอดภัย</div>
+                </div>
+
+                <div class="group">
+                    <div class="group-title">📑 Step 1 — ยอมรับข้อตกลง</div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">หลังคลิกยอมรับเงื่อนไข</div>
+                            <div class="setting-desc">รอช่องติ๊กถูกเปลี่ยนสถานะ</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="checkboxClickWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">หลังกดปุ่มยอมรับข้อตกลง</div>
+                            <div class="setting-desc">รอหน้าเปลี่ยนไป Step 2</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="acceptBtnWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                </div>
+
+                <div class="group">
+                    <div class="group-title">📋 เมนูแบบเลื่อนลง (วันเกิด / จังหวัด)</div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอเมนูเปิด</div>
+                            <div class="setting-desc">หลังคลิกเปิดเมนูเลือกค่า</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="dropdownOpenWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอหลังเลือกตัวเลือก</div>
+                            <div class="setting-desc">หลังคลิกเลือกค่า แล้วรอเมนูปิด</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="dropdownSelectWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                </div>
+
+                <div class="group">
+                    <div class="group-title">📍 Step 3 — ที่อยู่</div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รออำเภอโหลด</div>
+                            <div class="setting-desc">หลังเลือกจังหวัด</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="provinceLoadWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอตำบลโหลด</div>
+                            <div class="setting-desc">หลังเลือกอำเภอ</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="districtLoadWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอโหลดรหัสไปรษณีย์</div>
+                            <div class="setting-desc">หลังเลือกตำบล</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="subDistrictLoadWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                </div>
+
+                <details class="advanced">
+                    <summary>▸ แสดงค่าขั้นสูง (ไม่ต้องแตะหากไม่แน่ใจ)</summary>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอหลังเลือก Passport</div>
+                            <div class="setting-desc">ก่อนกรอกเลข Passport</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="passportRadioWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอตรวจสอบรหัสสมาชิก</div>
+                            <div class="setting-desc">หลังกรอก Referral Code</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="referralVerifyWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอเมื่อไม่พบตัวเลือก</div>
+                            <div class="setting-desc">ก่อนปิดเมนูที่หาไม่เจอ</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="dropdownNotFoundWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                    <div class="setting">
+                        <div class="setting-info">
+                            <div class="setting-label">รอเมื่อปิดเมนูค้าง</div>
+                            <div class="setting-desc">บังคับปิด Dropdown ที่ค้าง</div>
+                        </div>
+                        <div class="setting-input"><input type="number" data-timing="dropdownForceCloseWait" step="0.1" min="0" max="10"><span class="unit">วินาที</span></div>
+                    </div>
+                </details>
+
+                <div class="autosave-note">✓ บันทึกอัตโนมัติเมื่อแก้ไข</div>
+            </div>
+            <div class="modal-footer">
+                <button class="reset-link" type="button" id="resetTimingsBtn">↺ รีเซ็ตค่าเริ่มต้น</button>
+                <div style="flex: 1;"></div>
+                <button class="btn-secondary" style="width: auto; margin: 0; padding: 8px 20px;" type="button" id="closeModalBtnFooter">ปิด</button>
+            </div>
+        </div>
+    </div>
 
     <script src="popup.js"></script>
 </body>
