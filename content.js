@@ -6,8 +6,8 @@
 const DEFAULT_TIMINGS = {
   checkboxClickWait: 500,
   acceptBtnWait: 500,
-  dropdownOpenWait: 800, // จะถูกใช้เป็น Timeout สูงสุดแทน
-  dropdownSelectWait: 1000, // จะถูกใช้เป็น Timeout สูงสุดแทน
+  dropdownOpenWait: 1500, // ปรับเป็น 1500ms เพื่อความปลอดภัยของเครื่องช้า
+  dropdownSelectWait: 1500,
   provinceLoadWait: 1500,
   districtLoadWait: 1500,
   subDistrictLoadWait: 1500,
@@ -63,6 +63,15 @@ function sleep(ms) {
 // ---------------------------------------------------------
 // Helper Functions
 // ---------------------------------------------------------
+async function waitUntil(conditionFn, timeoutMs, intervalMs = 50) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const result = conditionFn();
+    if (result) return result;
+    await sleep(intervalMs);
+  }
+  return null;
+}
 
 async function fillStep1() {
   await waitForTimings();
@@ -138,19 +147,8 @@ function convertMonthToThai(monthStr) {
   return monthStr;
 }
 
-// Helper: รอจนกว่าเงื่อนไขจะเป็นจริง (Dynamic Wait แทน sleep ตายตัว)
-async function waitUntil(conditionFn, timeoutMs, intervalMs = 50) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const result = conditionFn();
-    if (result) return result;
-    await sleep(intervalMs);
-  }
-  return null;
-}
-
 // ---------------------------------------------------------
-// 🌟 Quasar Dropdown (Robust & Resilient Version)
+// 🌟 Dropdown แบบที่ 1: สำหรับรายการปกติ (วัน, เดือน, จังหวัด)
 // ---------------------------------------------------------
 async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
   if (!valueToSelect) return true;
@@ -160,66 +158,67 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
   const isNumeric = !isNaN(targetNum) && /^\d+$/.test(targetStr);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // 1. หา Element เป้าหมาย
+    // 1. หาตำแหน่งช่อง
     let targetLabel = null;
     for (let div of document.querySelectorAll('.q-field__label')) {
       if (div.innerText.includes(labelText)) { targetLabel = div; break; }
     }
     if (!targetLabel) return false;
+    
     const qField = targetLabel.closest('.q-field');
-    const nativeDiv = qField?.querySelector('.q-field__native');
+    if (!qField) return false;
+    const nativeDiv = qField.querySelector('.q-field__native');
     if (!nativeDiv) return false;
 
-    // 2. ถ้ามีค่าเดิมอยู่แล้ว ให้ผ่านเลย
-    const currentText = (nativeDiv.innerText || '').trim();
-    if (currentText.includes(targetStr) || targetStr.includes(currentText)) {
-      return true;
+    // 2. ถ้ามีค่าอยู่แล้วให้ผ่าน
+    if ((nativeDiv.innerText || '').trim().includes(targetStr)) return true;
+
+    // 3. ล้างเมนูค้างเก่า
+    const openMenus = Array.from(document.querySelectorAll('.q-menu')).filter(m => m.offsetHeight > 0);
+    if (openMenus.length > 0) {
+      document.body.click();
+      await sleep(300);
     }
 
-    // 3. เคลียร์เมนูเก่าที่อาจค้างอยู่
-    document.body.click();
-    await sleep(100);
-
-    // 4. คลิกเปิด Dropdown
+    // 4. เลื่อนหน้าจอมาที่ช่อง แล้วคลิกเปิด
+    qField.scrollIntoView({ block: 'center', behavior: 'instant' });
+    await sleep(200);
     nativeDiv.click();
-
-    // 5. รอเมนูเปิด (Dynamic Wait)
+    
+    // 5. รอเมนูเด้ง
     const targetMenu = await waitUntil(() => {
       const menus = document.querySelectorAll('.q-menu');
       for (let m of menus) {
         if (m.offsetWidth > 0 && m.offsetHeight > 0) return m;
       }
       return null;
-    }, TIMINGS.dropdownOpenWait);
+    }, TIMINGS.dropdownOpenWait || 1500);
 
     if (!targetMenu) {
       console.warn(`[Attempt ${attempt}] Dropdown "${labelText}" ไม่เปิด`);
-      continue; // ลองใหม่
+      continue; 
     }
 
-    // 6. ค้นหา Option ที่ต้องการ
+    // 6. ค้นหา Option
     let matchedOption = null;
     const options = targetMenu.querySelectorAll('.q-item');
     for (let opt of options) {
       const optText = opt.innerText.trim();
       if (isNumeric) {
-        const optNumMatch = optText.match(/\d+/);
-        if (optNumMatch && parseInt(optNumMatch[0], 10) === targetNum) {
-          matchedOption = opt; break;
-        }
+        const m = optText.match(/\d+/);
+        if (m && parseInt(m[0], 10) === targetNum) { matchedOption = opt; break; }
       } else if (optText.includes(targetStr)) {
         matchedOption = opt; break;
       }
     }
 
-    // 7. ถ้าเจอใน DOM ให้คลิก (พร้อมป้องกัน Virtual Scroll)
+    // 7. ถ้าเจอ ให้คลิก
     if (matchedOption) {
-      // เลื่อนหน้าจอไปหา
-      matchedOption.scrollIntoView({ block: 'center' });
-      await sleep(150); // รอให้ scroll และ DOM นิ่ง
+      matchedOption.scrollIntoView({ block: 'nearest' });
+      await sleep(250);
 
-      // ⚠️ สำคัญ: ค้นหา Option ใหม่อีกครั้ง เพราะ scrollIntoView อาจทำให้ DOM ถูก Re-render
-      let freshOptions = targetMenu.querySelectorAll('.q-item');
+      // ค้นหาใหม่ (แก้ปัญหา Virtual Scroll)
+      const freshOptions = targetMenu.querySelectorAll('.q-item');
       let freshMatched = null;
       for (let opt of freshOptions) {
         const optText = opt.innerText.trim();
@@ -231,58 +230,137 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
         }
       }
 
-      if (freshMatched) {
-        freshMatched.click();
-      } else {
-        matchedOption.click(); // fallback
-      }
+      if (freshMatched) freshMatched.click();
+      else matchedOption.click();
 
-      // 8. รอให้เมนูปิดและเช็คว่าค่าถูกใส่จริง
+      // 8. ตรวจสอบผลลัพธ์
       const success = await waitUntil(() => {
         const menuStillOpen = document.querySelector('.q-menu.q-position-engine') && document.querySelector('.q-menu.q-position-engine').offsetHeight > 0;
         const newText = (nativeDiv.innerText || '').trim();
-        const isValueCorrect = isNumeric ? newText.includes(targetNum.toString()) : newText.includes(targetStr);
-        return !menuStillOpen && isValueCorrect;
-      }, TIMINGS.dropdownSelectWait);
-
-      if (success) {
-        return true; // สำเร็จ!
-      } else {
-        console.warn(`[Attempt ${attempt}] เลือก "${valueToSelect}" แล้วค่าไม่ถูกต้อง (ค่าที่ได้: "${nativeDiv.innerText}")`);
-        document.body.click(); // ปิดเมนูที่ค้าง
-        await sleep(200);
-        // ไปต่อ Loop ถัดไป (Retry)
-      }
-    } else {
-      // 9. ถ้าไม่เจอใน DOM (Virtual Scroll) ใช้ Keyboard พิมพ์ค้นหา
-      const innerInput = qField.querySelector('input.q-field__native');
-      const focusTarget = innerInput || nativeDiv;
-      focusTarget.focus();
-      
-      for (let char of targetStr) {
-        focusTarget.dispatchEvent(new KeyboardEvent('keydown', { key: char, keyCode: char.charCodeAt(0), bubbles: true }));
-        focusTarget.dispatchEvent(new KeyboardEvent('keyup', { key: char, keyCode: char.charCodeAt(0), bubbles: true }));
-        await sleep(50);
-      }
-      await sleep(200);
-
-      focusTarget.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-      focusTarget.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
-
-      const success = await waitUntil(() => {
-        const newText = (nativeDiv.innerText || '').trim();
-        return isNumeric ? newText.includes(targetNum.toString()) : newText.includes(targetStr);
-      }, TIMINGS.dropdownSelectWait);
+        return !menuStillOpen && newText.includes(targetStr);
+      }, TIMINGS.dropdownSelectWait || 1500);
 
       if (success) return true;
       
-      console.warn(`[Attempt ${attempt}] Keyboard fallback ล้มเหลวสำหรับ "${valueToSelect}"`);
-      document.body.click();
-      await sleep(200);
+      console.warn(`[Attempt ${attempt}] เลือก "${valueToSelect}" แล้วค่าไม่ถูกต้อง`);
+      document.body.click(); 
+      await sleep(300);
+    } else {
+      // ถ้าไม่เจอใน DOM (สำหรับวัน/เดือนแทบไม่เกิด)
+      console.warn(`[Attempt ${attempt}] หา "${valueToSelect}" ไม่เจอ`);
+      document.body.click(); 
+      await sleep(300);
     }
   }
+  return false;
+}
 
-  console.error(`❌ ล้มเหลวในการเลือก "${valueToSelect}" ในช่อง "${labelText}" หลังจากลอง ${maxRetries} ครั้ง`);
+// ---------------------------------------------------------
+// 🌟 Dropdown แบบที่ 2: สำหรับรายการยาวๆ (ปีเกิด) ใช้วิธี Scroll หา
+// ---------------------------------------------------------
+async function selectQuasarByScroll(labelText, valueToSelect, maxRetries = 3) {
+  if (!valueToSelect) return true;
+  const targetStr = String(valueToSelect).trim();
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // 1. หาตำแหน่งช่อง
+    let targetLabel = null;
+    for (let div of document.querySelectorAll('.q-field__label')) {
+      if (div.innerText.includes(labelText)) { targetLabel = div; break; }
+    }
+    if (!targetLabel) return false;
+    
+    const qField = targetLabel.closest('.q-field');
+    if (!qField) return false;
+    const nativeDiv = qField.querySelector('.q-field__native');
+    if (!nativeDiv) return false;
+
+    if ((nativeDiv.innerText || '').trim().includes(targetStr)) return true;
+
+    // 2. ล้างเมนูค้างเก่า
+    const openMenus = Array.from(document.querySelectorAll('.q-menu')).filter(m => m.offsetHeight > 0);
+    if (openMenus.length > 0) {
+      document.body.click();
+      await sleep(300);
+    }
+
+    // 3. เปิด Dropdown
+    qField.scrollIntoView({ block: 'center', behavior: 'instant' });
+    await sleep(200);
+    nativeDiv.click();
+    
+    const targetMenu = await waitUntil(() => {
+      const menus = document.querySelectorAll('.q-menu');
+      for (let m of menus) {
+        if (m.offsetWidth > 0 && m.offsetHeight > 0) return m;
+      }
+      return null;
+    }, TIMINGS.dropdownOpenWait || 1500);
+
+    if (!targetMenu) continue;
+
+    await sleep(300); // รอ Animation
+
+    // ========================================================
+    // 🌟 จุดที่แก้ไข: บังคับ Scroll ขึ้นไปบนสุดก่อนเสมอ
+    // ========================================================
+    targetMenu.scrollTop = 0;
+    await sleep(300); // รอให้ Quasar วาด DOM รายการบนสุดใหม่
+    
+    let foundOption = null;
+    
+    // 4. ลองหาดูว่าตัวเลือกเป้าหมาย อยู่ในรายการบนสุดที่เพิ่งโหลดมาไหม
+    const firstBatch = targetMenu.querySelectorAll('.q-item');
+    for (let opt of firstBatch) {
+      if (opt.innerText.trim().includes(targetStr)) {
+        foundOption = opt;
+        break;
+      }
+    }
+
+    // 5. ถ้ายังไม่เจอ ค่อยไล่ Scroll ลงมาหา
+    if (!foundOption) {
+      for (let scrollCount = 0; scrollCount < 50; scrollCount++) { // เพิ่มเป็น 50 ครั้งเผื่อรายการยาวมากๆ
+        targetMenu.scrollTop += 300;
+        await sleep(150); // รอ Vue วาด DOM ใหม่
+        
+        const options = targetMenu.querySelectorAll('.q-item');
+        for (let opt of options) {
+          if (opt.innerText.trim().includes(targetStr)) {
+            foundOption = opt;
+            break;
+          }
+        }
+
+        if (foundOption) break;
+
+        // ถ้าเลื่อนสุดก้นแล้วยังไม่เจอ ให้หยุด
+        if (targetMenu.scrollTop + targetMenu.clientHeight >= targetMenu.scrollHeight - 10) {
+          break;
+        }
+      }
+    }
+
+    // 6. ถ้าเจอตัวเลือกแล้ว ให้คลิก
+    if (foundOption) {
+      foundOption.click();
+      
+      const success = await waitUntil(() => {
+        const newText = (nativeDiv.innerText || '').trim();
+        return newText.includes(targetStr);
+      }, TIMINGS.dropdownSelectWait || 1500);
+
+      if (success) {
+        console.log(`✅ [Scroll] เลือก "${targetStr}" ในช่อง "${labelText}" สำเร็จ`);
+        return true;
+      }
+    }
+
+    console.warn(`[Attempt ${attempt}] Scroll หา "${targetStr}" ไม่เจอ`);
+    document.body.click(); 
+    await sleep(300);
+  }
+
   return false;
 }
 
@@ -298,23 +376,31 @@ async function fillStep2(data) {
   if (data.firstName) {
     setInputValue(document.querySelector('input[aria-label="ชื่อจริง (ไม่ต้องใส่คำนำหน้าชื่อ) *"]'), data.firstName);
   }
+  
   const lastNameInput = document.querySelector('input[aria-label="นามสกุล *"]');
-  if (lastNameInput) setInputValue(lastNameInput, data.lastName);
+  if (lastNameInput) {
+    setInputValue(lastNameInput, data.lastName);
+    await sleep(400); // รอให้ฟอร์มตรวจสอบนามสกุลเสร็จก่อน
+  }
 
-  // 🌟 จัดการวัน เดือน ปี (เพิ่ม Delay ให้ Vue.js ประมวลผล)
+  // 🌟 จัดการวัน เดือน ปี
   if (data.dateOfBirth) {
     if (data.dateOfBirth.day) {
       const cleanDay = parseInt(data.dateOfBirth.day, 10).toString();
       await selectQuasarByLabel('วัน *', cleanDay);
-      await sleep(400); // รอให้ Vue อัปเดต State
+      await sleep(400); 
     }
+    
     if (data.dateOfBirth.month) {
       const thaiMonth = convertMonthToThai(data.dateOfBirth.month);
       await selectQuasarByLabel('เดือน *', thaiMonth);
-      await sleep(400); // รอให้ Vue อัปเดต State
+      await sleep(400); 
     }
+    
     if (data.dateOfBirth.year) {
-      await selectQuasarByLabel('ปีเกิด *', data.dateOfBirth.year);
+      // 🌟 ปีเกิดใช้ฟังก์ชัน Scroll แทน
+      await selectQuasarByScroll('ปีเกิด *', data.dateOfBirth.year);
+      await sleep(400);
     }
   }
 
@@ -361,7 +447,6 @@ async function fillStep2(data) {
   return result;
 }
 
-// (คงโค้ด fillStep3 เดิมไว้ตามที่คุณต้องการ)
 async function fillStep3(data) {
   await waitForTimings();
   console.log("เริ่มกรอก Step 3...");
