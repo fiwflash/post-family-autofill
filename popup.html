@@ -137,6 +137,14 @@
     <!-- REVIEW VALIDATION SECTION -->
     <!-- ========================================== -->
     <div id="reviewSection">
+        
+        <!-- 🌟 เพิ่มปุ่ม Step 1 ตรงนี้ -->
+        <div class="card" style="border-color: #fbcfe8; background-color: #fff5f7; margin-bottom: 12px; padding: 10px;">
+            <button id="step1BtnReview" class="btn-main" style="background-color: #e11d48; margin-top: 0; padding: 10px; font-size: 13px;">
+                📑 กดยอมรับข้อตกลง (Step 1) อีกครั้ง
+            </button>
+        </div>
+
         <div class="card">
             <label style="margin: 0; color: #0284c7;">👤 ข้อมูลส่วนตัว (Step 2)</label>
             <div class="review-grid" style="margin-top: 8px;">
@@ -197,7 +205,6 @@
     <!-- ========================================== -->
     <!-- ⚙️ SETTINGS MODAL -->
     <!-- ========================================== -->
-    <!-- ⚠️ ลบ onclick="..." ออกทั้งหมด เพราะ CSP ของ Extension ไม่รองรับ -->
     <div class="modal-overlay" id="settingsModal">
         <div class="modal">
             <div class="modal-header">

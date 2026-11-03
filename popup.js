@@ -11,8 +11,8 @@ let recommendedPostcode = '';
 const DEFAULT_TIMINGS = {
   checkboxClickWait: 500,
   acceptBtnWait: 500,
-  dropdownOpenWait: 800,
-  dropdownSelectWait: 1000,
+  dropdownOpenWait: 1500, 
+  dropdownSelectWait: 1500,
   provinceLoadWait: 1500,
   districtLoadWait: 1500,
   subDistrictLoadWait: 1500,
@@ -79,7 +79,9 @@ async function fetchAvailableModels(key, savedModel) {
             return nameLower.includes('gemini') && m.supportedGenerationMethods?.includes('generateContent') && !nameLower.includes('tts') && !nameLower.includes('embedding');
         });
 
+        // บังคับ gemini-2.5-flash ให้อยู่บนสุดเสมอ
         const getPriority = (name) => {
+            if (name.includes('2.5-flash')) return 9999;
             let s = 0;
             if (name.includes('3.8')) s += 380; else if (name.includes('3.6')) s += 360; else if (name.includes('3.5')) s += 350;
             else if (name.includes('3.')) s += 300; else if (name.includes('2.5')) s += 250; else if (name.includes('2.0')) s += 200;
@@ -100,7 +102,10 @@ async function fetchAvailableModels(key, savedModel) {
             select.appendChild(opt);
         });
 
-        if (!savedModel && select.options.length > 0) select.options[0].selected = true;
+        if (!savedModel && select.options.length > 0) {
+            select.options[0].selected = true;
+            chrome.storage.local.set({ selectedModel: select.options[0].value });
+        }
         statusDot.className = 'status-dot online';
     } catch (err) {
         select.innerHTML = '<option value="">❌ API Key ผิดพลาด</option>';
@@ -109,7 +114,7 @@ async function fetchAvailableModels(key, savedModel) {
 }
 
 // ==========================================
-// ⚙️ SETTINGS MODAL LOGIC (แก้ไข้เรื่อง Event Listener)
+// ⚙️ SETTINGS MODAL LOGIC
 // ==========================================
 const modal = document.getElementById('settingsModal');
 
@@ -118,24 +123,10 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
     modal.classList.add('open');
 });
 
-// ปุ่ม X ปิด
-document.getElementById('closeModalBtnX').addEventListener('click', () => {
-    modal.classList.remove('open');
-});
+document.getElementById('closeModalBtnX').addEventListener('click', () => modal.classList.remove('open'));
+document.getElementById('closeModalBtnFooter').addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
 
-// ปุ่ม "ปิด" ด้านล่าง
-document.getElementById('closeModalBtnFooter').addEventListener('click', () => {
-    modal.classList.remove('open');
-});
-
-// คลิกพื้นที่ว่างด้านนอกเพื่อปิด
-modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-        modal.classList.remove('open');
-    }
-});
-
-// โหลดค่าลง UI (แปลง ms → วินาที)
 function loadTimingsIntoUI() {
     document.querySelectorAll('[data-timing]').forEach(el => {
         const key = el.dataset.timing;
@@ -146,13 +137,11 @@ function loadTimingsIntoUI() {
     detectActivePreset();
 }
 
-// บันทึกค่าลง chrome.storage.local
 function persistTimings() {
     chrome.storage.local.set({ fillTimings: currentTimings });
     detectActivePreset();
 }
 
-// อ่านค่าจาก input → currentTimings (หน่วย วินาที → ms)
 function readTimingsFromUI() {
     document.querySelectorAll('[data-timing]').forEach(el => {
         const key = el.dataset.timing;
@@ -163,23 +152,16 @@ function readTimingsFromUI() {
     });
 }
 
-// ผูก event: input ทุกช่อง → auto-save
 document.querySelectorAll('[data-timing]').forEach(el => {
-    el.addEventListener('input', () => {
-        readTimingsFromUI();
-        persistTimings();
-    });
+    el.addEventListener('input', () => { readTimingsFromUI(); persistTimings(); });
     el.addEventListener('blur', () => {
         const key = el.dataset.timing;
-        if (currentTimings[key] !== undefined) {
-            el.value = (currentTimings[key] / 1000).toFixed(1);
-        }
+        if (currentTimings[key] !== undefined) el.value = (currentTimings[key] / 1000).toFixed(1);
         readTimingsFromUI();
         persistTimings();
     });
 });
 
-// Preset buttons
 document.querySelectorAll('.preset').forEach(btn => {
     btn.addEventListener('click', () => {
         const mult = PRESET_MULTIPLIERS[btn.dataset.preset];
@@ -192,16 +174,12 @@ document.querySelectorAll('.preset').forEach(btn => {
     });
 });
 
-// ตรวจจับว่า current settings ตรงกับ preset ไหนหรือไม่
 function detectActivePreset() {
     let matched = null;
     for (const [id, mult] of Object.entries(PRESET_MULTIPLIERS)) {
         let isMatch = true;
         for (const key of Object.keys(DEFAULT_TIMINGS)) {
-            if (currentTimings[key] !== Math.round(DEFAULT_TIMINGS[key] * mult)) {
-                isMatch = false;
-                break;
-            }
+            if (currentTimings[key] !== Math.round(DEFAULT_TIMINGS[key] * mult)) { isMatch = false; break; }
         }
         if (isMatch) { matched = id; break; }
     }
@@ -210,7 +188,6 @@ function detectActivePreset() {
     });
 }
 
-// Reset
 document.getElementById('resetTimingsBtn').addEventListener('click', () => {
     currentTimings = { ...DEFAULT_TIMINGS };
     loadTimingsIntoUI();
@@ -222,7 +199,8 @@ document.getElementById('resetTimingsBtn').addEventListener('click', () => {
 // ==========================================
 const SIGNUP_URL = "https://praisanee.my.site.com/postfamily/Signup";
 
-document.getElementById('step1Btn').addEventListener('click', async () => {
+// ฟังก์ชันกลางสำหรับการทำงานของ Step 1
+async function executeStep1() {
     const status = document.getElementById('status');
     status.innerText = "กำลังเปิดหน้าเว็บ & ยอมรับข้อตกลง...";
     status.style.color = "#3b82f6";
@@ -255,7 +233,7 @@ document.getElementById('step1Btn').addEventListener('click', async () => {
             await new Promise(r => setTimeout(r, 1500));
         }
 
-        const executeStep1 = () => {
+        const sendStep1Message = () => {
             return new Promise((resolve) => {
                 chrome.tabs.sendMessage(targetTab.id, { action: "fillStep1" }, (response) => {
                     if (chrome.runtime.lastError) {
@@ -267,11 +245,11 @@ document.getElementById('step1Btn').addEventListener('click', async () => {
             });
         };
 
-        let res = await executeStep1();
+        let res = await sendStep1Message();
 
         if (!res.success && res.error) {
             await new Promise(r => setTimeout(r, 1000));
-            res = await executeStep1();
+            res = await sendStep1Message();
         }
 
         if (res.success) {
@@ -286,7 +264,14 @@ document.getElementById('step1Btn').addEventListener('click', async () => {
         status.innerText = `⚠️ เกิดข้อผิดพลาด: ${err.message}`;
         status.style.color = "#ef4444";
     }
-});
+}
+
+// ผูก Event ให้กับทั้ง 2 ปุ่ม (แบบปลอดภัย ไม่พัง)
+const btnStep1Main = document.getElementById('step1Btn');
+if (btnStep1Main) btnStep1Main.addEventListener('click', executeStep1);
+
+const btnStep1Review = document.getElementById('step1BtnReview');
+if (btnStep1Review) btnStep1Review.addEventListener('click', executeStep1);
 
 // ==========================================
 // 🎁 REFERRAL CODE MANAGEMENT
@@ -314,10 +299,7 @@ function saveRecommendedPostcode() {
 
 document.getElementById('recommendedPostcode').addEventListener('blur', saveRecommendedPostcode);
 document.getElementById('recommendedPostcode').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-        saveRecommendedPostcode();
-        event.currentTarget.blur();
-    }
+    if (event.key === 'Enter') { saveRecommendedPostcode(); event.currentTarget.blur(); }
 });
 
 function renderRefCodes() {
@@ -414,11 +396,12 @@ document.getElementById('togglePassword').addEventListener('click', () => {
 });
 
 // ==========================================
-// 🧠 AI EXTRACTION
+// 🧠 AI EXTRACTION (พร้อมระบบ Auto-Switch Model)
 // ==========================================
 document.getElementById('processBtn').addEventListener('click', () => {
     const apiKey = document.getElementById('apiKey').value.trim();
-    const model = document.getElementById('modelSelect').value;
+    const modelSelect = document.getElementById('modelSelect');
+    const model = modelSelect.value;
     const status = document.getElementById('status');
 
     if (!apiKey || !model) {
@@ -441,7 +424,30 @@ document.getElementById('processBtn').addEventListener('click', () => {
                 document.getElementById('reviewSection').classList.add('active');
                 status.innerText = "✅ วิเคราะห์เสร็จสิ้น!"; status.style.color = "#16a34a";
             } else {
-                status.innerText = "Error: " + (response ? response.error : "ไม่สามารถเชื่อมต่อได้");
+                const errorMsg = response ? response.error : "ไม่สามารถเชื่อมต่อได้";
+                
+                if (errorMsg.includes("high demand") || errorMsg.includes("Spikes in demand")) {
+                    const topModelValue = modelSelect.options[0].value;
+                    
+                    if (model !== topModelValue && topModelValue !== "") {
+                        modelSelect.value = topModelValue;
+                        chrome.storage.local.set({ selectedModel: topModelValue });
+                        
+                        status.innerText = `⚠️ โมเดลมีผู้ใช้งานหนาแน่น ระบบสลับไปใช้ ${modelSelect.options[0].innerText} แทน...`;
+                        status.style.color = "#f59e0b";
+                        
+                        setTimeout(() => {
+                            document.getElementById('processBtn').click();
+                        }, 1500);
+                        return;
+                    } else {
+                        status.innerText = "⚠️ เซิร์ฟเวอร์ Gemini มีผู้ใช้งานหนาแน่น กรุณาลองใหม่ภายหลัง";
+                        status.style.color = "#ef4444";
+                        return;
+                    }
+                }
+
+                status.innerText = "Error: " + errorMsg;
                 status.style.color = "#ef4444";
             }
         }
