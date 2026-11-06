@@ -6,7 +6,7 @@
 const DEFAULT_TIMINGS = {
   checkboxClickWait: 500,
   acceptBtnWait: 500,
-  dropdownOpenWait: 1500, // ปรับเป็น 1500ms เพื่อความปลอดภัยของเครื่องช้า
+  dropdownOpenWait: 1500,
   dropdownSelectWait: 1500,
   provinceLoadWait: 1500,
   districtLoadWait: 1500,
@@ -148,17 +148,15 @@ function convertMonthToThai(monthStr) {
 }
 
 // ---------------------------------------------------------
-// 🌟 Dropdown แบบที่ 1: สำหรับรายการปกติ (วัน, เดือน, จังหวัด)
+// 🌟 ฟังก์ชันสำหรับรายการสั้น (วัน, เดือน)
 // ---------------------------------------------------------
 async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
   if (!valueToSelect) return true;
-
   const targetStr = String(valueToSelect).trim();
   const targetNum = parseInt(targetStr, 10);
   const isNumeric = !isNaN(targetNum) && /^\d+$/.test(targetStr);
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // 1. หาตำแหน่งช่อง
     let targetLabel = null;
     for (let div of document.querySelectorAll('.q-field__label')) {
       if (div.innerText.includes(labelText)) { targetLabel = div; break; }
@@ -170,22 +168,18 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
     const nativeDiv = qField.querySelector('.q-field__native');
     if (!nativeDiv) return false;
 
-    // 2. ถ้ามีค่าอยู่แล้วให้ผ่าน
     if ((nativeDiv.innerText || '').trim().includes(targetStr)) return true;
 
-    // 3. ล้างเมนูค้างเก่า
     const openMenus = Array.from(document.querySelectorAll('.q-menu')).filter(m => m.offsetHeight > 0);
     if (openMenus.length > 0) {
       document.body.click();
       await sleep(300);
     }
 
-    // 4. เลื่อนหน้าจอมาที่ช่อง แล้วคลิกเปิด
     qField.scrollIntoView({ block: 'center', behavior: 'instant' });
     await sleep(200);
     nativeDiv.click();
     
-    // 5. รอเมนูเด้ง
     const targetMenu = await waitUntil(() => {
       const menus = document.querySelectorAll('.q-menu');
       for (let m of menus) {
@@ -194,12 +188,8 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
       return null;
     }, TIMINGS.dropdownOpenWait || 1500);
 
-    if (!targetMenu) {
-      console.warn(`[Attempt ${attempt}] Dropdown "${labelText}" ไม่เปิด`);
-      continue; 
-    }
+    if (!targetMenu) continue; 
 
-    // 6. ค้นหา Option
     let matchedOption = null;
     const options = targetMenu.querySelectorAll('.q-item');
     for (let opt of options) {
@@ -212,28 +202,8 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
       }
     }
 
-    // 7. ถ้าเจอ ให้คลิก
     if (matchedOption) {
-      matchedOption.scrollIntoView({ block: 'nearest' });
-      await sleep(250);
-
-      // ค้นหาใหม่ (แก้ปัญหา Virtual Scroll)
-      const freshOptions = targetMenu.querySelectorAll('.q-item');
-      let freshMatched = null;
-      for (let opt of freshOptions) {
-        const optText = opt.innerText.trim();
-        if (isNumeric) {
-          const m = optText.match(/\d+/);
-          if (m && parseInt(m[0], 10) === targetNum) { freshMatched = opt; break; }
-        } else if (optText.includes(targetStr)) {
-          freshMatched = opt; break;
-        }
-      }
-
-      if (freshMatched) freshMatched.click();
-      else matchedOption.click();
-
-      // 8. ตรวจสอบผลลัพธ์
+      matchedOption.click();
       const success = await waitUntil(() => {
         const menuStillOpen = document.querySelector('.q-menu.q-position-engine') && document.querySelector('.q-menu.q-position-engine').offsetHeight > 0;
         const newText = (nativeDiv.innerText || '').trim();
@@ -241,13 +211,6 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
       }, TIMINGS.dropdownSelectWait || 1500);
 
       if (success) return true;
-      
-      console.warn(`[Attempt ${attempt}] เลือก "${valueToSelect}" แล้วค่าไม่ถูกต้อง`);
-      document.body.click(); 
-      await sleep(300);
-    } else {
-      // ถ้าไม่เจอใน DOM (สำหรับวัน/เดือนแทบไม่เกิด)
-      console.warn(`[Attempt ${attempt}] หา "${valueToSelect}" ไม่เจอ`);
       document.body.click(); 
       await sleep(300);
     }
@@ -256,14 +219,13 @@ async function selectQuasarByLabel(labelText, valueToSelect, maxRetries = 3) {
 }
 
 // ---------------------------------------------------------
-// 🌟 Dropdown แบบที่ 2: สำหรับรายการยาวๆ (ปีเกิด) ใช้วิธี Scroll หา
+// 🌟 ฟังก์ชันสำหรับรายการยาวๆ (ปีเกิด, จังหวัด, อำเภอ, ตำบล) ใช้ Scroll หา
 // ---------------------------------------------------------
 async function selectQuasarByScroll(labelText, valueToSelect, maxRetries = 3) {
   if (!valueToSelect) return true;
   const targetStr = String(valueToSelect).trim();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // 1. หาตำแหน่งช่อง
     let targetLabel = null;
     for (let div of document.querySelectorAll('.q-field__label')) {
       if (div.innerText.includes(labelText)) { targetLabel = div; break; }
@@ -277,14 +239,14 @@ async function selectQuasarByScroll(labelText, valueToSelect, maxRetries = 3) {
 
     if ((nativeDiv.innerText || '').trim().includes(targetStr)) return true;
 
-    // 2. ล้างเมนูค้างเก่า
+    // ล้างเมนูเก่า
     const openMenus = Array.from(document.querySelectorAll('.q-menu')).filter(m => m.offsetHeight > 0);
     if (openMenus.length > 0) {
       document.body.click();
       await sleep(300);
     }
 
-    // 3. เปิด Dropdown
+    // เปิด Dropdown
     qField.scrollIntoView({ block: 'center', behavior: 'instant' });
     await sleep(200);
     nativeDiv.click();
@@ -301,47 +263,36 @@ async function selectQuasarByScroll(labelText, valueToSelect, maxRetries = 3) {
 
     await sleep(300); // รอ Animation
 
-    // ========================================================
-    // 🌟 จุดที่แก้ไข: บังคับ Scroll ขึ้นไปบนสุดก่อนเสมอ
-    // ========================================================
+    // 🌟 กฎเหล็ก: Scroll กลับไปบนสุดก่อน
     targetMenu.scrollTop = 0;
-    await sleep(300); // รอให้ Quasar วาด DOM รายการบนสุดใหม่
+    await sleep(300);
     
     let foundOption = null;
     
-    // 4. ลองหาดูว่าตัวเลือกเป้าหมาย อยู่ในรายการบนสุดที่เพิ่งโหลดมาไหม
+    // หาในรอบแรก
     const firstBatch = targetMenu.querySelectorAll('.q-item');
     for (let opt of firstBatch) {
-      if (opt.innerText.trim().includes(targetStr)) {
-        foundOption = opt;
-        break;
-      }
+      if (opt.innerText.trim().includes(targetStr)) { foundOption = opt; break; }
     }
 
-    // 5. ถ้ายังไม่เจอ ค่อยไล่ Scroll ลงมาหา
+    // ถ้ายังไม่เจอ ค่อยไล่ Scroll ลงมาหา
     if (!foundOption) {
-      for (let scrollCount = 0; scrollCount < 50; scrollCount++) { // เพิ่มเป็น 50 ครั้งเผื่อรายการยาวมากๆ
+      for (let scrollCount = 0; scrollCount < 50; scrollCount++) {
         targetMenu.scrollTop += 300;
-        await sleep(150); // รอ Vue วาด DOM ใหม่
+        await sleep(150); 
         
         const options = targetMenu.querySelectorAll('.q-item');
         for (let opt of options) {
-          if (opt.innerText.trim().includes(targetStr)) {
-            foundOption = opt;
-            break;
-          }
+          if (opt.innerText.trim().includes(targetStr)) { foundOption = opt; break; }
         }
 
         if (foundOption) break;
 
-        // ถ้าเลื่อนสุดก้นแล้วยังไม่เจอ ให้หยุด
-        if (targetMenu.scrollTop + targetMenu.clientHeight >= targetMenu.scrollHeight - 10) {
-          break;
-        }
+        if (targetMenu.scrollTop + targetMenu.clientHeight >= targetMenu.scrollHeight - 10) break;
       }
     }
 
-    // 6. ถ้าเจอตัวเลือกแล้ว ให้คลิก
+    // ถ้าเจอ ให้คลิก
     if (foundOption) {
       foundOption.click();
       
@@ -360,7 +311,6 @@ async function selectQuasarByScroll(labelText, valueToSelect, maxRetries = 3) {
     document.body.click(); 
     await sleep(300);
   }
-
   return false;
 }
 
@@ -398,7 +348,6 @@ async function fillStep2(data) {
     }
     
     if (data.dateOfBirth.year) {
-      // 🌟 ปีเกิดใช้ฟังก์ชัน Scroll แทน
       await selectQuasarByScroll('ปีเกิด *', data.dateOfBirth.year);
       await sleep(400);
     }
@@ -453,16 +402,17 @@ async function fillStep3(data) {
   const addr = data.address;
   if (!addr) return;
 
+  // 🌟 เปลี่ยนมาใช้ selectQuasarByScroll เพื่อแก้ปัญหา Virtual Scroll
   if (addr.province) {
-    const success = await selectQuasarByLabel('จังหวัด *', addr.province);
+    const success = await selectQuasarByScroll('จังหวัด *', addr.province);
     if (success) await sleep(TIMINGS.provinceLoadWait);
   }
   if (addr.district) {
-    const success = await selectQuasarByLabel('เขต / อำเภอ *', addr.district);
+    const success = await selectQuasarByScroll('เขต / อำเภอ *', addr.district);
     if (success) await sleep(TIMINGS.districtLoadWait);
   }
   if (addr.subDistrict) {
-    await selectQuasarByLabel('แขวง / ตำบล *', addr.subDistrict);
+    await selectQuasarByScroll('แขวง / ตำบล *', addr.subDistrict);
     await sleep(TIMINGS.subDistrictLoadWait);
   }
 

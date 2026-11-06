@@ -3,6 +3,9 @@ backup/
 *.bak
 *.tmp
 *.swp
+*.rar
+*.zip
+*.7z
 
 # OS Files
 Thumbs.db
