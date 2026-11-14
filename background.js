@@ -6,7 +6,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "extractDataWithGemini") {
     extractData(request.text, request.imageBase64, request.model, request.apiKey)
-      .then(data => sendResponse({ success: true, data }))
+      .then(result => sendResponse({ success: true, data: result.data, modelUsed: result.modelUsed }))
       .catch(error => {
           console.error("Extraction Error:", error);
           sendResponse({ success: false, error: error.message });
@@ -15,12 +15,57 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// ==========================================
+// 🤖 GEMINI FREE TIER MODEL FALLBACK ORDER
+// ==========================================
+// ลำดับโมเดลตามตาราง (ต้องตรงกับ MODEL_PRIORITY ใน popup.js)
+const MODEL_FALLBACK = [
+  'gemini-3.5-flash-lite',  // 🍃 แนะนำ - เสถียรและเร็วสุด (default)
+  'gemini-2.5-flash-lite',  // 🟢 fallback - ประหยัด
+  'gemini-2.5-flash',       // 🔵 fallback
+  'gemini-3.6-flash',       // 🚀 แม่นยำ - ช้า/ติดโหลดเป็นระยะ
+  'gemini-3.8-flash',       // ⚡ เร็วสุด - ช่วงนี้ติดโหลดสูง
+];
+
+// HTTP สถานะที่ถือว่าเป็น "ติดโหลด/ชั่วคราว" → สมควรลอง fallback ต่อ
+const TRANSIENT_STATUS = new Set([429, 500, 503]);
+const TRANSIENT_PATTERN = /high demand|spikes in demand|resource[\s_]*exhausted|rate[\s_]?limit|quota|unavailable|overloaded|too many requests/i;
+
+function normalizeModelId(model) {
+  const id = String(model || '').replace(/^models\//, '').trim();
+  return id || MODEL_FALLBACK[0];
+}
+
+function isTransient(error) {
+  if (TRANSIENT_STATUS.has(error.status)) return true;
+  return TRANSIENT_PATTERN.test(error.message || '');
+}
+
 async function extractData(text, imageBase64, model, apiKey) {
   if (!apiKey) throw new Error("Please set your Gemini API Key in Settings.");
 
-  const modelName = model || "gemini-1.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${apiKey}`;
-  
+  // ลองโมเดลที่ผู้ใช้เลือกก่อน แล้วค่อยไล่ fallback ตามลำดับตาราง
+  const requested = normalizeModelId(model);
+  const order = [requested, ...MODEL_FALLBACK.filter(id => id !== requested)];
+
+  let lastError;
+  for (const modelId of order) {
+    try {
+      const data = await generateContent(modelId, text, imageBase64, apiKey);
+      return { data, modelUsed: modelId };
+    } catch (error) {
+      lastError = error;
+      // error ที่ไม่ใช่ "ติดโหลดชั่วคราว" → หยุดทันที ไม่ไล่ fallback ต่อ
+      if (!isTransient(error)) throw error;
+      console.warn(`Model ${modelId} unavailable, trying next fallback:`, error.message);
+    }
+  }
+  throw lastError;
+}
+
+async function generateContent(modelId, text, imageBase64, apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+
   // Prompt ใหม่: บังคับภาษาไทย และเพิ่ม Email
   const promptText = `
     Extract information from the provided ID card image and/or text for a POST Family registration.
@@ -65,36 +110,38 @@ async function extractData(text, imageBase64, model, apiKey) {
     parts.push({ inline_data: { mime_type: "image/jpeg", data: cleanBase64 } });
   }
 
-  try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: parts }],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.1
-          }
-        })
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error?.message || "Gemini API Error");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: parts }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.1
       }
+    })
+  });
 
-      const data = await response.json();
-      let responseText = data.candidates[0].content.parts[0].text;
-
-      responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const firstBracket = responseText.indexOf('{');
-      const lastBracket = responseText.lastIndexOf('}');
-      if (firstBracket !== -1 && lastBracket !== -1) {
-          responseText = responseText.substring(firstBracket, lastBracket + 1);
-      }
-
-      return JSON.parse(responseText);
-  } catch (error) {
-      throw error;
+  if (!response.ok) {
+    let message = "Gemini API Error";
+    try {
+      const err = await response.json();
+      message = err.error?.message || message;
+    } catch (e) { /* ignore */ }
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
+
+  const data = await response.json();
+  let responseText = data.candidates[0].content.parts[0].text;
+
+  responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+  const firstBracket = responseText.indexOf('{');
+  const lastBracket = responseText.lastIndexOf('}');
+  if (firstBracket !== -1 && lastBracket !== -1) {
+      responseText = responseText.substring(firstBracket, lastBracket + 1);
+  }
+
+  return JSON.parse(responseText);
 }

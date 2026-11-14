@@ -26,6 +26,23 @@ const PRESET_MULTIPLIERS = { fast: 0.5, normal: 1.0, safe: 1.5 };
 let currentTimings = { ...DEFAULT_TIMINGS };
 
 // ==========================================
+// 🤖 GEMINI FREE TIER MODEL PRIORITY
+// ==========================================
+// ลำดับโมเดลตามตาราง (ต้องตรงกับ MODEL_FALLBACK ใน background.js)
+const MODEL_PRIORITY = [
+  { id: 'gemini-3.5-flash-lite', emoji: '🍃', label: '3.5 Flash-Lite', note: 'แนะนำ - เสถียรและเร็วสุด' },
+  { id: 'gemini-2.5-flash-lite', emoji: '🟢', label: '2.5 Flash-Lite', note: 'fallback - ประหยัด' },
+  { id: 'gemini-2.5-flash',      emoji: '🔵', label: '2.5 Flash',      note: 'fallback' },
+  { id: 'gemini-3.6-flash',      emoji: '🚀', label: '3.6 Flash',      note: 'แม่นยำ - ช้า/ติดโหลดเป็นระยะ' },
+  { id: 'gemini-3.8-flash',      emoji: '⚡', label: '3.8 Flash',      note: 'เร็วสุด - ช่วงนี้ติดโหลดสูง' },
+];
+const DEFAULT_MODEL_ID = MODEL_PRIORITY[0].id; // gemini-3.5-flash-lite
+
+function getModelLabel(id) {
+  return MODEL_PRIORITY.find(m => m.id === id) || null;
+}
+
+// ==========================================
 // ⚙️ INITIALIZATION & SETTINGS
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -74,37 +91,48 @@ async function fetchAvailableModels(key, savedModel) {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
         if (!response.ok) throw new Error("Invalid");
         const data = await response.json();
-        let models = data.models.filter(m => {
-            const nameLower = m.name.toLowerCase();
-            return nameLower.includes('gemini') && m.supportedGenerationMethods?.includes('generateContent') && !nameLower.includes('tts') && !nameLower.includes('embedding');
-        });
 
-        // บังคับ gemini-2.5-flash ให้อยู่บนสุดเสมอ
-        const getPriority = (name) => {
-            if (name.includes('2.5-flash')) return 9999;
-            let s = 0;
-            if (name.includes('3.8')) s += 380; else if (name.includes('3.6')) s += 360; else if (name.includes('3.5')) s += 350;
-            else if (name.includes('3.')) s += 300; else if (name.includes('2.5')) s += 250; else if (name.includes('2.0')) s += 200;
-            else if (name.includes('1.5')) s += 150;
-            if (name.includes('flash') && !name.includes('pro')) s += 50;
-            if (name.includes('preview')) s -= 10;
-            return s;
-        };
-        models.sort((a, b) => getPriority(b.name) - getPriority(a.name));
+        // ชุด model id ที่ key นี้เข้าถึงได้จริง (ตัด prefix "models/" ออก)
+        const availableIds = new Set(
+            (data.models || [])
+                .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+                .map(m => (m.name || '').replace(/^models\//, ''))
+        );
 
         select.innerHTML = '';
-        models.forEach(model => {
+
+        // ใส่ตามลำดับตาราง Free Tier (ข้ามโมเดลที่ key นี้ใช้ไม่ได้)
+        MODEL_PRIORITY.forEach(m => {
+            if (!availableIds.has(m.id)) return;
             const opt = document.createElement('option');
-            opt.value = model.name;
-            let displayName = (model.displayName || model.name.split('/')[1]).replace('models/', '');
-            opt.innerText = `${model.name.includes('flash') ? '⚡' : '🧠'} ${displayName}`;
-            if (model.name === savedModel) opt.selected = true;
+            opt.value = 'models/' + m.id;
+            opt.innerText = `${m.emoji} ${m.label}`;
+            opt.title = m.note;
             select.appendChild(opt);
         });
 
-        if (!savedModel && select.options.length > 0) {
-            select.options[0].selected = true;
-            chrome.storage.local.set({ selectedModel: select.options[0].value });
+        // fallback: ถ้า key เข้าถึงโมเดลในตารางไม่ได้เลย → แสดงทุกรายการที่ใช้ generateContent ได้
+        if (select.options.length === 0) {
+            (data.models || [])
+                .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+                .forEach(model => {
+                    const opt = document.createElement('option');
+                    opt.value = model.name;
+                    opt.innerText = `${model.name.includes('flash') ? '⚡' : '🧠'} ${(model.displayName || model.name.split('/')[1]).replace('models/', '')}`;
+                    select.appendChild(opt);
+                });
+        }
+
+        // เลือกค่า: savedModel ถ้ายังมีอยู่, ไม่งั้น default (3.5 Flash-Lite), ไม่งั้นตัวแรกในรายการ
+        const savedId = savedModel ? String(savedModel).replace(/^models\//, '') : '';
+        const values = [...select.options].map(o => o.value);
+        const targetId = values.includes('models/' + savedId) ? savedId
+                       : (values.includes('models/' + DEFAULT_MODEL_ID) ? DEFAULT_MODEL_ID
+                       : (select.options.length ? select.options[0].value.replace(/^models\//, '') : ''));
+
+        if (targetId) {
+            select.value = 'models/' + targetId;
+            chrome.storage.local.set({ selectedModel: 'models/' + targetId });
         }
         statusDot.className = 'status-dot online';
     } catch (err) {
@@ -422,31 +450,22 @@ document.getElementById('processBtn').addEventListener('click', () => {
                 populateReviewForm(response.data);
                 document.getElementById('inputSection').classList.add('hidden');
                 document.getElementById('reviewSection').classList.add('active');
-                status.innerText = "✅ วิเคราะห์เสร็จสิ้น!"; status.style.color = "#16a34a";
+
+                // แสดงโมเดลที่ใช้จริง (กรณี fallback อัตโนมัติจาก background)
+                const usedId = response.modelUsed ? String(response.modelUsed).replace(/^models\//, '') : '';
+                const selectedId = model.replace(/^models\//, '');
+                const used = getModelLabel(usedId) || { emoji: '🤖', label: usedId };
+
+                if (usedId && usedId !== selectedId) {
+                    modelSelect.value = 'models/' + usedId;
+                    chrome.storage.local.set({ selectedModel: 'models/' + usedId });
+                    status.innerText = `✅ วิเคราะห์เสร็จ! (สลับไปใช้ ${used.emoji} ${used.label} อัตโนมัติ)`;
+                } else {
+                    status.innerText = "✅ วิเคราะห์เสร็จสิ้น!";
+                }
+                status.style.color = "#16a34a";
             } else {
                 const errorMsg = response ? response.error : "ไม่สามารถเชื่อมต่อได้";
-                
-                if (errorMsg.includes("high demand") || errorMsg.includes("Spikes in demand")) {
-                    const topModelValue = modelSelect.options[0].value;
-                    
-                    if (model !== topModelValue && topModelValue !== "") {
-                        modelSelect.value = topModelValue;
-                        chrome.storage.local.set({ selectedModel: topModelValue });
-                        
-                        status.innerText = `⚠️ โมเดลมีผู้ใช้งานหนาแน่น ระบบสลับไปใช้ ${modelSelect.options[0].innerText} แทน...`;
-                        status.style.color = "#f59e0b";
-                        
-                        setTimeout(() => {
-                            document.getElementById('processBtn').click();
-                        }, 1500);
-                        return;
-                    } else {
-                        status.innerText = "⚠️ เซิร์ฟเวอร์ Gemini มีผู้ใช้งานหนาแน่น กรุณาลองใหม่ภายหลัง";
-                        status.style.color = "#ef4444";
-                        return;
-                    }
-                }
-
                 status.innerText = "Error: " + errorMsg;
                 status.style.color = "#ef4444";
             }
