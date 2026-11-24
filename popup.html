@@ -123,7 +123,20 @@
         <div class="card drop-zone" id="pasteZone">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <label style="margin-bottom: 0; color: #1e40af;">📄 ข้อมูลนำเข้า</label>
-                <button id="clearInputBtn" style="background: none; border: none; cursor: pointer; font-size: 11px; color: #ef4444;">🗑️ ล้าง</button>
+                <div style="display: flex; gap: 8px;">
+                    <button id="readCardBtn" type="button" style="background: none; border: none; cursor: pointer; font-size: 11px; color: #16a34a; font-weight: bold; display: inline-flex; align-items: center; gap: 3px;">
+                        <svg viewBox="0 0 24 16" width="16" height="11" aria-hidden="true" focusable="false">
+                            <rect x="1" y="1" width="22" height="14" rx="2" fill="#2563eb"/>
+                            <circle cx="7.5" cy="6.5" r="3" fill="#dbeafe"/>
+                            <circle cx="7.5" cy="5.5" r="1.2" fill="#2563eb"/>
+                            <path d="M5.1 9.3c0-1.4 1.1-2.4 2.4-2.4s2.4 1 2.4 2.4z" fill="#2563eb"/>
+                            <rect x="12.5" y="5" width="7.5" height="1.4" rx="0.7" fill="#e0f2fe"/>
+                            <rect x="12.5" y="8" width="5.5" height="1.4" rx="0.7" fill="#e0f2fe"/>
+                        </svg>
+                        อ่านบัตร
+                    </button>
+                    <button id="clearInputBtn" type="button" style="background: none; border: none; cursor: pointer; font-size: 11px; color: #ef4444;">🗑️ ล้าง</button>
+                </div>
             </div>
             <textarea id="textInput" placeholder="แปะข้อความ หรือรูปภาพบัตรประชาชน / Passport ตรงนี้...&#10;หรือพิมพ์เบอร์โทรศัพท์ และ Email (ถ้ามี) เพิ่มเติม..." style="height: 80px;"></textarea>
             <div id="imagePreviewContainer" class="preview-container" style="display: none; margin-top: 8px;"></div>

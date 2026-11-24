@@ -7,6 +7,12 @@ backup/
 *.zip
 *.7z
 
+# Native host build artifacts
+native-host/postfamily_card_reader.exe
+native-host/postfamily_card_reader.json
+native-host/register.exe
+native-host/register.log
+
 # OS Files
 Thumbs.db
 Desktop.ini

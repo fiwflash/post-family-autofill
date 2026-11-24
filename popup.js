@@ -410,6 +410,39 @@ document.getElementById('clearInputBtn').addEventListener('click', () => {
 });
 
 // ==========================================
+// 🪪 READ CARD (Native Messaging host)
+// ==========================================
+document.getElementById('readCardBtn').addEventListener('click', () => {
+    const status = document.getElementById('status');
+    const btn = document.getElementById('readCardBtn');
+
+    status.innerText = "กำลังอ่านบัตรประชาชน...";
+    status.style.color = "#3b82f6";
+    btn.disabled = true;
+
+    chrome.runtime.sendNativeMessage("postfamily_card_reader", { command: "read" }, (response) => {
+        btn.disabled = false;
+
+        if (chrome.runtime.lastError) {
+            status.innerText = "⚠️ ไม่พบเครื่องอ่านบัตร — เสียบ reader + บัตร และติดตั้ง host แล้วหรือยัง?";
+            status.style.color = "#ef4444";
+            return;
+        }
+
+        if (response && response.success) {
+            populateReviewForm(response.data);
+            document.getElementById('inputSection').classList.add('hidden');
+            document.getElementById('reviewSection').classList.add('active');
+            status.innerText = "✅ อ่านบัตรสำเร็จ!";
+            status.style.color = "#16a34a";
+        } else {
+            status.innerText = "⚠️ " + (response ? response.error : "อ่านบัตรไม่สำเร็จ");
+            status.style.color = "#ef4444";
+        }
+    });
+});
+
+// ==========================================
 // 🔐 PASSWORD TOGGLE
 // ==========================================
 document.getElementById('togglePassword').addEventListener('click', () => {
