@@ -13,10 +13,13 @@
 | `main.go` | host ตัวหลัก — อ่านบัตรผ่าน APDU → ตอบ JSON |
 | `cmd/register/main.go` | source ของ `register.exe` (GUI ลงทะเบียน) |
 | `go.mod` / `go.sum` | Go module + dependencies |
-| `register.exe` *(build)* | ดับเบิลคลิกเพื่อลงทะเบียน |
-| `postfamily_card_reader.exe` *(build)* | host ที่ Chrome เรียก |
+| `register.exe` | ดับเบิลคลิกเพื่อลงทะเบียน (แถมมาแล้ว ไม่ต้อง build) |
+| `postfamily_card_reader.exe` | host ที่ Chrome เรียก (แถมมาแล้ว ไม่ต้อง build) |
 
 ## Build (เครื่อง dev — ต้องมี Go toolchain)
+
+> 💡 ไฟล์ `.exe` ทั้ง 2 ตัว**แถมมาใน repo แล้ว** — ถ้าแค่จะใช้งาน ไม่ต้อง build
+> (build เฉพาะตอนอยากแก้โค้ดใหม่)
 
 ติดตั้ง Go จาก https://go.dev/dl/ แล้วรัน:
 
