@@ -27,6 +27,17 @@
         .review-field label { font-size: 10px; color: #64748b; margin-bottom: 2px; }
         .review-field.full { grid-column: span 2; }
 
+        /* 🔔 Phone required warning */
+        .review-field label .req-star { color: #dc2626; }
+        .phone-warning { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; padding: 10px 12px; border-radius: 10px; background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; font-size: 12px; font-weight: 600; line-height: 1.4; }
+        .phone-warning[hidden] { display: none !important; }
+        .phone-warning .phone-warning-icon { font-size: 16px; flex-shrink: 0; }
+        .phone-field-missing label { color: #dc2626; }
+        .phone-missing { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
+        .phone-missing:focus { border-color: #dc2626 !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25) !important; }
+        @keyframes phone-pulse { 0%, 100% { box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35); } 50% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.12); } }
+        .phone-missing:not(:focus) { animation: phone-pulse 1.6s ease-in-out infinite; }
+
         /* Referral Code Tags */
         .ref-tag { display: inline-block; padding: 4px 10px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 12px; cursor: pointer; margin-right: 5px; margin-bottom: 5px; user-select: none; transition: all 0.2s; }
         .ref-tag:hover { background: #e2e8f0; }
@@ -160,12 +171,16 @@
 
         <div class="card">
             <label style="margin: 0; color: #0284c7;">👤 ข้อมูลส่วนตัว (Step 2)</label>
+            <div id="phoneWarning" class="phone-warning" role="alert" hidden>
+                <span class="phone-warning-icon" aria-hidden="true">⚠️</span>
+                <span><strong>ยังไม่ได้กรอกเบอร์โทรศัพท์</strong> — บัตรประชาชน/Passport ไม่มีเบอร์โทร กรุณาพิมพ์เอง</span>
+            </div>
             <div class="review-grid" style="margin-top: 8px;">
                 <div class="review-field"><label>ชื่อจริง</label><input type="text" id="rev_firstName"></div>
                 <div class="review-field"><label>นามสกุล</label><input type="text" id="rev_lastName"></div>
                 <div class="review-field"><label>เลขบัตร ปชช.</label><input type="text" id="rev_citizenId"></div>
                 <div class="review-field"><label>Passport No.</label><input type="text" id="rev_passport"></div>
-                <div class="review-field"><label>เบอร์โทร</label><input type="text" id="rev_phone"></div>
+                <div class="review-field" id="phoneField"><label>เบอร์โทร <span class="req-star" aria-hidden="true">*</span></label><input type="text" id="rev_phone" autocomplete="tel"></div>
                 <div class="review-field full"><label>Email</label><input type="email" id="rev_email"></div>
 
                 <div class="review-field full"><label>วันเกิด (วว/ดด/ปปปป)</label>

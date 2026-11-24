@@ -559,7 +559,31 @@ function populateReviewForm(data) {
         document.getElementById('rev_province').value = '';
         document.getElementById('rev_postcode').value = '';
     }
+
+    updatePhoneWarning();
 }
+
+// 🔔 เน้นเตือนช่องเบอร์โทร เมื่อยังไม่มีค่า (บัตร/รูปไม่มีเบอร์โทร)
+function updatePhoneWarning() {
+    const phoneInput = document.getElementById('rev_phone');
+    const banner = document.getElementById('phoneWarning');
+    const field = document.getElementById('phoneField') || phoneInput.closest('.review-field');
+    const isEmpty = !phoneInput.value.trim();
+
+    banner.hidden = !isEmpty;
+    phoneInput.classList.toggle('phone-missing', isEmpty);
+    field.classList.toggle('phone-field-missing', isEmpty);
+
+    if (isEmpty) {
+        phoneInput.setAttribute('aria-invalid', 'true');
+        phoneInput.setAttribute('aria-describedby', 'phoneWarning');
+    } else {
+        phoneInput.setAttribute('aria-invalid', 'false');
+        phoneInput.removeAttribute('aria-describedby');
+    }
+}
+
+document.getElementById('rev_phone').addEventListener('input', updatePhoneWarning);
 
 function getReviewedData() {
     return {
